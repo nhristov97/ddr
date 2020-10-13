@@ -1,210 +1,188 @@
-var DDRUI = function () {
-	var notes = [];
-	var gameStarted = false;
-	var Score = 0;
+(() => {
+  
+   var firebaseConfig = {
+    apiKey: "AIzaSyCfaTn_repN5X2HaEa9Frlck9nduy-CF4U",
+    authDomain: "cisc472proj1.firebaseapp.com",
+    databaseURL:"https://cisc472proj1.firebaseio.com",
+    projectId: "cisc472proj1",
+    storageBucket: "cisc472proj1.appspot.com",
+    messagingSenderId: "680899853408",
+    appId: "1:680899853408:web:872c469335a48f49755705",
+    measurementId: "G-3K16J02P4Y"
+  };
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  let db = firebase.database();
+  
+  const settings = {
+    speed: 25,
+    size: 50,
+  };
 
-	// For random arrows
-	var randNum = 0;
+  const game = {
+    score: 0,
+  };
 
-	// Frame increasing
-	var frame = 0;
+  const snake = {
+    size: 10,
+    arr: [],
+    direction: 'r',
+  };
 
-	var song = new Audio("./Bad Apple!!.wav");
-	// Determines the speed of notes
-	var arrowSpawnRate = 25;
+  let interval = null;
+  let field = [];
+  let food = {};
 
-	var self = this;
-	this.game = undefined;
-	this.running = false;
-	this.initialize = function () {
-		$('#GameStopped').show();
-		$('#GameRunning').hide();
-		$('#DanceFloor').hide();
+  document.addEventListener('keydown', (e) => { onKey(e); }, false);
 
-		$('#StartBtn').on('click', function () {
-			$('#GameStopped').hide();
-			$('#GameRunning').show();
-			$('#DanceFloor').show();
-			self.running = true;
-			gameStarted = true;
+  const snakeGround = document.querySelector('.snakeGround');
+  const score = document.querySelector('.score');
 
-			if (self.running) {
-				song.play();
-			}
-		});
+  window.onload = () => {
+    snakeGround.style.width = `${settings.size * 5}px`;
+    snakeGround.style.height = `${settings.size * 5}px`;
+    startGame();
+  };
 
-		// code below controls stopping the game with space bar
-		$(document).keydown(function (event) {
-			if (event.keyCode == 32) {
-				$('#GameStopped').show();
-				$('#GameRunning').hide();
-				$('#DanceFloor').hide();
-				self.running = false;
-				if (self.running == false) {
-					song.pause();
-				}
-			}
-		});
+  const onKey = (e) => {
+    if (e.which === 40 && snake.direction !== 'd') {
+      snake.direction = 'u';
+    }
+    if (e.which === 38 && snake.direction !== 'u') {
+      snake.direction = 'd';
+    }
+    if (e.which === 37 && snake.direction !== 'r') {
+      snake.direction = 'l';
+    }
+    if (e.which === 39 && snake.direction !== 'l') {
+      snake.direction = 'r';
+    }
+  };
 
-		$(document).keydown(function (event) {
-			if (event.keyCode == 82) {
-				location.reload();
-			}
-		});
+  const startGame = () => {
+    snake.arr = [];
+    snake.size = 15;
+    game.score = 0;
+    snake.direction = 'r';
+    field = [];
+    score.textContent = '0';
+    
+      db.ref("topscore").once('value', ss =>{
+    var top = document.querySelector('.topscore');
+     top.textContent = 'Top Score: ' + ss.val();
+      })
+    db.ref("topname").once('value', ss =>{
+    var topname = document.querySelector('.topname');
+     topname.textContent = 'By: ' + ss.val();
+      })
 
-		// $('#StopBtn').on('click', function () {
-		// 	$('#GameStopped').show();
-		// 	$('#GameRunning').hide();
-		// 	$('#DanceFloor').hide();
-		// 	self.running = false;
-		// });
-	};
+    let randomXPos = Math.floor(Math.random() * settings.size);
+    let randomYpos = Math.floor(Math.random() * settings.size);
+    for (var i = snake.size - 1; i >= 0; i--) {
+      snake.arr.push({x: i + randomXPos, y: randomYpos});
+    }
+    fill();
 
-	function Arrow(direction) {
-		// CSS spacings for the arrows //
-		var xPos = null;
+    clearInterval(interval);
+    interval = setInterval(() => {
+        moveSnake();
+    }, 1000 / settings.speed);
+  };
 
-		switch (direction) {
-			case "left":
-				xPos = "123px";
-				break;
-			case "up":
-				xPos = "499px";
-				break;
-			case "down":
-				xPos = "306px";
-				break;
-			case "right":
-				xPos = "672px";
-				break;
-		}
+  const fill = () => {
+    snakeGround.innerHTML = '';
+    for (let i = 0; i < settings.size; i++) {
+      field[i] = [];
+      snakeGround.appendChild(document.createElement('div'));
+      snakeGround.lastChild.classList.add('row');
 
-		this.direction = direction;
-		this.image = $("<img src='./images/" + direction + ".gif'/>");
-		this.image.css({
-			position: "absolute",
-			top: "0px",
-			left: xPos
-		});
-		$('#DanceFloor').append(this.image);
-	} // ends CLASS Arrow
+      for (let j = 0; j < settings.size; j++) {
+        field[i][j] = snakeGround.lastChild.appendChild(document.createElement('div'));
+        snakeGround.lastChild.lastChild.classList.add('pixel');
+      }
+    }
+    placeFood();
+  };
 
+  const drawSnake = () => {
+    const pixels = document.querySelectorAll('.pixel');
+    pixels.forEach(pixel => pixel.classList.remove('snake'));
+    snake.arr.forEach(item => field[item.y][item.x].classList.add('snake'));
+  };
 
-	// To enable animating the arrows
-	Arrow.prototype.step = function () {
-		// Controls the speed of the arrows
-		this.image.css("top", "+=4px");
-	};
+  const moveSnake = () => {
+    let sx = snake.arr[0].x;
+    let sy = snake.arr[0].y;
 
-	// Deletes arrows when they get to bottom of page
-	Arrow.prototype.destroy = function () {
-		// removes the image of the DOM
-		this.image.remove();
-		// Removes the note/arrow from memory/array
-		notes.splice(0, 1);
-	};
+    switch(snake.direction) {
+      case 'r':
+        sx += 1;
+        break;
+      case 'd':
+        sy -= 1;
+        break;
+      case 'l':
+        sx -= 1;
+        break;
+      case 'u':
+        sy += 1;
+        break;
+    }
 
-	// Explodes arrow when hit
-	Arrow.prototype.explode = function () {
-		this.image.remove();
-	};
+    let tail = snake.arr.pop();
 
-	// Random generator for arrows
-	function randomGen() {
-		// Randomizes between 1 and 4
-		randNum = Math.floor(Math.random() * 4) + 1;
-		if (randNum === 1) {
-			notes.push(new Arrow("left"));
-		}
-		if (randNum === 2) {
-			notes.push(new Arrow("right"));
-		}
-		if (randNum === 3) {
-			notes.push(new Arrow("up"));
-		}
-		if (randNum === 4) {
-			notes.push(new Arrow("down"));
-		}
-	} // ends randomGen()
+    // go thought the walls
+    if (sx >= field.length) { sx = 0; }
+    if (sx < 0) { sx = field.length - 1; }
+    if (sy >= field.length) { sy = 0; }
+    if (sy < 0) { sy = field.length - 1; }
 
-	// Render function //
-	function render() {
-		if (frame++ % arrowSpawnRate === 0) {
-			randomGen();
-		};
+    // eat food
+    if (sx == food.x && sy == food.y) {
+      snake.size += 1;
+      snake.arr.push({ x: tail.x, y: tail.y });
+      const pixels = document.querySelectorAll('.pixel');
+      pixels.forEach(pixel => pixel.classList.remove('food'));
+      game.score += 1;
+      score.textContent = 'Score: ' + game.score;
+      placeFood();
+    }
 
-		// Animate arrows showering down //
-		for (var i = notes.length - 1; i >= 0; i--) {
-			notes[i].step();
-			// Check for cleanup
-			if (notes[i].image.position().top > 445) {
-				notes[i].destroy();
-			}
-		}
-	} // ends render()
+    tail.x = sx;
+    tail.y = sy;
 
-	// jQuery to animate arrows //
-	$(document).ready(function () {
-		// shim layer with setTimeout fallback
-		window.requestAnimFrame = (function () {
-			return window.requestAnimationFrame ||
-				window.webkitRequestAnimationFrame ||
-				window.mozRequestAnimationFrame ||
-				function (callback) {
-					window.setTimeout(callback, 40 / 75);
-				};
-		})();
+    if (checkGameOver(tail)) {
+      db.ref("topscore").once('value', ss =>{
+        if(game.score > ss.val()){
+     var newhigh = prompt("You got a new high score!", "Enter your name");  
+ db.ref("topname").set(newhigh);         db.ref("topscore").set(game.score);
+      snake.arr = [];
+      startGame();
+        }
+        else{
+      snake.arr = [];
+      startGame();
+        }
+      });
+      
+    } else {
+      snake.arr.unshift(tail);
+      drawSnake();
+    }
+  };
 
-		// Infinte loop for game play
-		(function animloop() {
-			if (gameStarted) {
-				requestAnimFrame(animloop);
-				render();
-			} else {
-				window.setTimeout(animloop, 1000); // check the state per second
-			}
-		})(); // ends (function animloop() )
-	}); // ends $(doc).ready
+  const placeFood = () => {
+    do {
+      food = getRandomFoodPlace();
+    } while (checkGameOver(food));
+    field[food.y][food.x].classList.add('food');
+  }
 
+  const getRandomFoodPlace = () => ({
+    x: Math.floor(Math.random() * settings.size),
+    y: Math.floor(Math.random() * settings.size),
+  });
 
-	// Listening for when the key is pressed
-	$(document).keydown(function (event) {
-		for (var i = 0; i < notes.length; i++) {
-			if (event.keyCode == 37 && notes[i].direction == "left") {
-				if (notes[i].image.position().top > 385 && notes[i].image.position().top < 500) {
-					console.log("LEFT! " + notes[i].explode());
-					Score++;
-					score();
-				}
-			}
-			if (event.keyCode == 38 && notes[i].direction == "up") {
-				if (notes[i].image.position().top > 385 && notes[i].image.position().top < 500) {
-					console.log("UP! " + notes[i].explode());
-					Score++;
-					score();
-				}
-			}
-			if (event.keyCode == 40 && notes[i].direction == "down") {
-				if (notes[i].image.position().top > 385 && notes[i].image.position().top < 500) {
-					console.log("DOWN! " + notes[i].explode());
-					Score++;
-					score();
-				}
-			}
-			if (event.keyCode == 39 && notes[i].direction == "right") {
-				if (notes[i].image.position().top > 385 && notes[i].image.position().top < 500) {
-					console.log("RIGHT! " + notes[i].explode());
-					Score++;
-					score();
-				}
-			}
-		} // ends loop
-	}); // ends $(doc).keyup
-
-	// function that will display the score up in the top right of the page
-	function score() {
-		document.querySelector("#dancePoints").textContent = "Points Earned: " + Score;
-	}
-
-	this.initialize();
-}
+  const checkGameOver = head => snake.arr.some(item => item.x === head.x && item.y === head.y);
+;
+})();
